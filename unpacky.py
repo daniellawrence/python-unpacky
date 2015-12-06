@@ -4,10 +4,18 @@ import re
 
 
 def get_byte(data):
-    return data[0], data[1:]
+    byte = data[0]
+    remaining_data = data[1:]
+    return byte, remaining_data
 
 
-def get_byte_int(data): 
+def get_bytes(data, number_of_bytes):
+    byte = data[number_of_bytes]
+    remaining_data = data[number_of_bytes+1:]
+    return ord(byte), remaining_data
+
+
+def get_byte_int(data):
     response, remaining_data = get_byte(data)
     response = ord(response)
     return response, remaining_data
@@ -20,7 +28,7 @@ def get_byte_chr(data):
 
 def get_byte_bool(data):
     response, remaining_data = get_byte_int(data)
-    return bool(response), remaining_data
+    return bool(int(response)), remaining_data
 
 
 def get_short(data):
@@ -53,9 +61,10 @@ process_map = {
     'byte_int': get_byte_int,
     'byte_chr': get_byte_chr,
     'byte_bool': get_byte_bool,
+    'int': get_short,
     'short': get_short,
     'long': get_long,
-    'longlong': get_longlong,
+    'float': get_longlong,
     'string': get_string,
 }
 
@@ -65,11 +74,12 @@ class Unpacky(object):
     def __init__(self, pattern, data):
         self.pattern = pattern
         self.raw_data = data
-        self.data = self.process(pattern, data)
+        self.data, self.remaining_data = self.process(pattern, data)
 
     def generate_maps(self, pattern):
         map_types = []
         map_names = []
+        pattern = re.sub("-", "{byte:_}", pattern)
         regex_matches = re.findall('{(\w+):(\w+)}', pattern)
         for _type, _name in regex_matches:
             map_types.append(_type)
@@ -77,7 +87,10 @@ class Unpacky(object):
         return map_types, map_names
 
     def map_values(self, names, values):
-        return dict(zip(names, values))
+        name_values = dict(zip(names, values))
+        if '_' in name_values:
+            del name_values['_']
+        return name_values
 
     def process(self, pattern, raw_data):
         self.map_types, self.map_names = self.generate_maps(pattern)
@@ -87,8 +100,7 @@ class Unpacky(object):
         for _type in self.map_types:
             value, remaining_data = process_map[_type](remaining_data)
             values.append(value)
-
-        return self.map_values(self.map_names, values)
+        return self.map_values(self.map_names, values), remaining_data
 
 
 if __name__ == '__main__':
